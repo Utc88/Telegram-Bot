@@ -101,7 +101,6 @@ async def start_attack_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=speed_keyboard
     )
     user_settings[update.effective_user.id]['awaiting_speed'] = True
-
 async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, speed: str):
     user = update.effective_user
     config = ATTACK_PROFILES[speed]
