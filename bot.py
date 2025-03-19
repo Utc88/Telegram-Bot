@@ -13,13 +13,6 @@ import os
 import random
 from datetime import datetime
 
-# ██████╗  ██████╗ ████████╗
-# ██╔══██╗██╔═══██╗╚══██╔══╝
-# ██████╔╝██║   ██║   ██║   
-# ██╔══██╗██║   ██║   ██║   
-# ██████╔╝╚██████╔╝   ██║   
-# ╚═════╝  ╚═════╝    ╚═╝   
-
 # إعدادات البوت
 TOKEN = os.environ.get("BOT_TOKEN")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
@@ -44,13 +37,6 @@ CONTROL_PANEL = ReplyKeyboardMarkup(
     selective=True
 )
 
-# ███████╗███████╗██████╗ 
-# ██╔════╝██╔════╝██╔══██╗
-# █████╗  █████╗  ██████╔╝
-# ██╔══╝  ██╔══╝  ██╔══██╗
-# ██║     ███████╗██║  ██║
-# ╚═╝     ╚══════╝╚═╝  ╚═╝
-
 active_sessions = {}
 user_stats = {}
 logging.basicConfig(
@@ -59,24 +45,20 @@ logging.basicConfig(
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نظام التشغيل الذكي"""
     user = update.effective_user
     await show_control_panel(update, user)
     
-    # تسجيل الإحصائيات
     user_stats[user.id] = {
         'first_seen': datetime.now(),
         'attack_count': 0
     }
     
-    # إرسال تنبيه للقروب
     await context.bot.send_message(
         chat_id=GROUP_ID,
         text=f"🌟 دخول جديد:\n┌ {user.mention_html()}\n└ ID: {user.id}"
     )
 
 async def show_control_panel(update: Update, user):
-    """عرض لوحة التحكم التفاعلية"""
     welcome_msg = (
         f"مرحبًا {user.mention_html()}! 👾\n"
         "╔════════════════╗\n"
@@ -90,7 +72,6 @@ async def show_control_panel(update: Update, user):
     )
 
 async def handle_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نظام معالجة الأوامر الذكي"""
     text = update.message.text
     user = update.effective_user
     
@@ -106,20 +87,11 @@ async def handle_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text in command_handlers:
         await command_handlers[text](update, context, user)
 
-# ██████╗ ██████╗ ███╗   ██╗████████╗███████╗
-#██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝██╔════╝
-#██║     ██║   ██║██╔██╗ ██║   ██║   ███████╗
-#██║     ██║   ██║██║╚██╗██║   ██║   ╚════██║
-#╚██████╗╚██████╔╝██║ ╚████║   ██║   ███████║
-# ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝
-
 async def start_attack_sequence(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
-    """نظام الهجوم الذكي"""
     if user.id in active_sessions:
         await update.message.reply_text("⚠️ يوجد هجوم نشط بالفعل!")
         return
     
-    # إنشاء قائمة سرعات هجوم ديناميكية
     speed_selector = ReplyKeyboardMarkup(
         [[speed] for speed in ATTACK_PROFILES.keys()],
         resize_keyboard=True,
@@ -131,11 +103,9 @@ async def start_attack_sequence(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=speed_selector
     )
     
-    # تعيين حالة الانتظار
     context.user_data['awaiting_speed'] = True
 
 async def handle_attack_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة اختيار السرعة"""
     if context.user_data.get('awaiting_speed'):
         selected_speed = update.message.text
         if selected_speed in ATTACK_PROFILES:
@@ -143,7 +113,6 @@ async def handle_attack_selection(update: Update, context: ContextTypes.DEFAULT_
             context.user_data['awaiting_speed'] = False
 
 async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, speed):
-    """تنفيذ الهجوم"""
     user = update.effective_user
     config = ATTACK_PROFILES[speed]
     
@@ -164,7 +133,6 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
         'message_count': 0
     }
     
-    # تحديث الإحصائيات
     user_stats[user.id]['attack_count'] += 1
     
     await update.message.reply_text(
@@ -173,7 +141,6 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
     )
 
 async def attack_callback(context: CallbackContext):
-    """نظام إرسال الرسائل التلقائي"""
     job = context.job
     user_id = job.data['user_id']
     
@@ -182,23 +149,15 @@ async def attack_callback(context: CallbackContext):
         await context.bot.send_message(
             chat_id=user_id,
             text=random.choice(msg_pool)
+        )  # التصحيح هنا
         
-        # تحديث الإحصائيات
         active_sessions[user_id]['message_count'] += 1
         
     except Exception as e:
         logging.error(f"فشل الهجوم: {e}")
         await notify_admin(context, f"🚨 فشل هجوم: {e}")
 
-# ███████╗██╗  ██╗██████╗ 
-# ██╔════╝╚██╗██╔╝██╔══██╗
-# █████╗   ╚███╔╝ ██████╔╝
-# ██╔══╝   ██╔██╗ ██╔═══╝ 
-# ███████╗██╔╝ ██╗██║     
-# ╚══════╝╚═╝  ╚═╝╚═╝     
-
 async def emergency_stop(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
-    """الإيقاف الفوري الذكي"""
     if user.id not in active_sessions:
         await update.message.reply_text("🔇 لا يوجد هجوم نشط!")
         return
@@ -215,7 +174,6 @@ async def emergency_stop(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     await notify_admin(context, f"🛑 إيقاف هجوم من: {user.mention_html()}")
 
 async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
-    """لوحة الإعدادات المتقدمة"""
     settings_msg = (
         "⚙️ الإعدادات المتقدمة:\n"
         "▸ ضبط سرعات الهجوم\n"
@@ -226,7 +184,6 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     await update.message.reply_text(settings_msg)
 
 async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
-    """نظام الإحصائيات التفصيلي"""
     stats = user_stats.get(user.id, {})
     msg = (
         f"📊 إحصائياتك:\n"
@@ -237,7 +194,6 @@ async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE, us
     await update.message.reply_text(msg)
 
 async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
-    """نظام المساعدة التفاعلي"""
     help_msg = (
         "❔ دليل الاستخدام:\n"
         "▸ 🚀 بدء الهجوم: بدء إرسال الرسائل\n"
@@ -249,7 +205,6 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
     await update.message.reply_text(help_msg)
 
 async def tech_support(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
-    """نظام الدعم الفني المباشر"""
     support_msg = (
         "👨💻 الدعم الفني:\n"
         "للإبلاغ عن مشاكل أو اقتراحات:\n"
@@ -259,15 +214,7 @@ async def tech_support(update: Update, context: ContextTypes.DEFAULT_TYPE, user)
     )
     await update.message.reply_text(support_msg)
 
-# ███████╗██╗   ██╗███╗   ██╗ ██████╗ 
-# ██╔════╝██║   ██║████╗  ██║██╔════╝ 
-# █████╗  ██║   ██║██╔██╗ ██║██║  ███╗
-# ██╔══╝  ██║   ██║██║╚██╗██║██║   ██║
-# ██║     ╚██████╔╝██║ ╚████║╚██████╔╝
-# ╚═╝      ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ 
-
 async def notify_admin(context: CallbackContext, message: str):
-    """نظام الإشعارات المتقدم"""
     try:
         await context.bot.send_message(
             chat_id=ADMIN_ID,
@@ -278,7 +225,6 @@ async def notify_admin(context: CallbackContext, message: str):
         logging.error(f"فشل إرسال الإشعار: {e}")
 
 async def error_handler(update: Update, context: CallbackContext):
-    """نظام معالجة الأخطاء الذكي"""
     error = context.error
     logging.error(f"حدث خطأ: {error}")
     
@@ -291,10 +237,8 @@ async def error_handler(update: Update, context: CallbackContext):
     await notify_admin(context, error_report)
 
 def main():
-    """نظام التشغيل الرئيسي"""
     application = Application.builder().token(TOKEN).build()
     
-    # إضافة المعالجات
     handlers = [
         CommandHandler('start', start),
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_commands),
