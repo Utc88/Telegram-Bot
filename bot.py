@@ -106,11 +106,10 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
     user = update.effective_user
     config = ATTACK_PROFILES[speed]
     
-    # إلغاء الهجمات السابقة
     if user.id in active_sessions:
         active_sessions[user.id]['job'].schedule_removal()
     
-    # التصحيح: إضافة القوس المفقود هنا
+    # التصحيح: إضافة القوس المغلق بشكل صحيح
     job = context.application.job_queue.run_repeating(
         callback=attack_callback,
         interval=config['delay'],
@@ -120,7 +119,7 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
             'message': user_settings[user.id]['custom_message']
         },
         name=str(user.id)
-    )  # <-- هذا القوس كان مفقودًا
+    )  # <-- تم إصلاح الخطأ هنا
     
     active_sessions[user.id] = {
         'job': job,
@@ -136,7 +135,7 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
     )
 
 # ---------------------------
-#  باقي الدوال بدون تغيير
+#  باقي الدوال
 # ---------------------------
 async def attack_callback(context: CallbackContext):
     try:
