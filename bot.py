@@ -1,4 +1,4 @@
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -10,7 +10,7 @@ from telegram.ext import (
 )
 import logging
 import os
-import random
+import time
 from datetime import datetime
 
 # إعدادات البوت
@@ -20,146 +20,161 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
 # إعدادات الهجوم
 ATTACK_PROFILES = {
-    '🚀 سريع': {'delay': 0.3, 'symbol': '.'},
-    '⚡ متوسط': {'delay': 1.5, 'symbol': '.'},
-    '🐢 بطيء': {'delay': 3, 'symbol': '.'}
+    '🚀 سريع': {'delay': 0.3},
+    '⚡ متوسط': {'delay': 1.5},
+    '🐢 بطيء': {'delay': 3}
 }
 
-# تخزين الرسائل المخصصة
-custom_messages = {}
-
-# لوحة التحكم
-CONTROL_PANEL = ReplyKeyboardMarkup(
-    [
-        ["🚀 بدء الهجوم", "🛑 إيقاف فوري"],
-        ["✏️ تعديل الرسالة", "⚙️ الإعدادات"],
-        ["📊 الإحصائيات", "❓ المساعدة"]
-    ],
-    resize_keyboard=True,
-    is_persistent=True
-)
-
+# تخزين الحالات
 active_sessions = {}
-user_stats = {}
+user_settings = {}
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    await show_control_panel(update, user)
-    
-    user_stats[user.id] = {
-        'first_seen': datetime.now(),
-        'attack_count': 0,
-        'custom_message': None
-    }
+# لوحة التحكم الرئيسية
+main_keyboard = ReplyKeyboardMarkup(
+    [
+        ["🚀 بدء الهجوم", "🛑 إيقاف الهجوم"],
+        ["✏️ تعديل الرسالة", "🏠 القائمة الرئيسية"]
+    ],
+    resize_keyboard=True,
+    is_persistent=True
+)
 
-async def show_control_panel(update: Update, user):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بدء المحادثة وعرض اللوحة"""
+    user = update.effective_user
+    user_settings[user.id] = {'custom_message': '.' * 100}
+    
     await update.message.reply_text(
-        f"مرحبًا {user.first_name}!\nاختر من الأزرار:",
-        reply_markup=CONTROL_PANEL
+        f"مرحبًا {user.first_name}! 👾\nاختر أحد الخيارات:",
+        reply_markup=main_keyboard
+    )
+    
+    await context.bot.send_message(
+        GROUP_ID,
+        f"🌟 مستخدم جديد: {user.mention_html()}",
+        parse_mode='HTML'
     )
 
-async def handle_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة جميع الرسائل"""
     text = update.message.text
     user = update.effective_user
     
-    if text == "🚀 بدء الهجوم":
-        await start_attack_sequence(update, context, user)
-    elif text == "🛑 إيقاف فوري":
-        await emergency_stop(update, context, user)
+    if text == "🏠 القائمة الرئيسية":
+        await show_main_menu(update)
+    elif text == "🚀 بدء الهجوم":
+        await start_attack(update, context)
+    elif text == "🛑 إيقاف الهجوم":
+        await stop_attack(update, context)
     elif text == "✏️ تعديل الرسالة":
-        await request_custom_message(update, user)
-    elif text == "⚙️ الإعدادات":
-        await show_settings(update)
-    elif text == "📊 الإحصائيات":
-        await show_statistics(update, user)
-    elif text == "❓ المساعدة":
-        await show_help(update)
+        await request_custom_message(update)
+    else:
+        if user_settings.get(user.id, {}).get('awaiting_input'):
+            await set_custom_message(update, context)
 
-async def request_custom_message(update: Update, user):
+async def show_main_menu(update: Update):
+    """عرض القائمة الرئيسية"""
     await update.message.reply_text(
-        "📝 أرسل الرسالة الجديدة التي تريدها:",
+        "القائمة الرئيسية:",
+        reply_markup=main_keyboard
+    )
+
+async def start_attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بدء عملية الهجوم"""
+    speed_keyboard = ReplyKeyboardMarkup(
+        [[speed] for speed in ATTACK_PROFILES.keys()],
+        resize_keyboard=True
+    )
+    await update.message.reply_text("⚡ اختر سرعة الهجوم:", reply_markup=speed_keyboard)
+    user_settings[update.effective_user.id]['awaiting_speed'] = True
+
+async def stop_attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إيقاف الهجوم الحالي"""
+    user_id = update.effective_user.id
+    if user_id in active_sessions:
+        active_sessions[user_id]['job'].schedule_removal()
+        del active_sessions[user_id]
+        await update.message.reply_text("✅ تم إيقاف الهجوم!")
+    else:
+        await update.message.reply_text("⚠️ لا يوجد هجوم نشط!")
+
+async def request_custom_message(update: Update):
+    """طلب رسالة مخصصة من المستخدم"""
+    await update.message.reply_text(
+        "📝 أرسل الرسالة الجديدة (سيتم تكرارها):",
         reply_markup=ReplyKeyboardRemove()
     )
-    user_stats[user.id]['awaiting_message'] = True
+    user_settings[update.effective_user.id]['awaiting_input'] = True
 
-async def handle_custom_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def set_custom_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """حفظ الرسالة المخصصة"""
     user = update.effective_user
-    if user_stats.get(user.id, {}).get('awaiting_message', False):
-        new_message = update.message.text
-        user_stats[user.id]['custom_message'] = new_message
-        user_stats[user.id]['awaiting_message'] = False
-        await update.message.reply_text(
-            f"✅ تم تعيين الرسالة:\n{new_message}",
-            reply_markup=CONTROL_PANEL
-        )
-
-async def start_attack_sequence(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
-    speed_selector = ReplyKeyboardMarkup(
-        [[speed] for speed in ATTACK_PROFILES.keys()],
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
-    await update.message.reply_text("⚡ اختر السرعة:", reply_markup=speed_selector)
-    context.user_data['awaiting_speed'] = True
-
-async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, speed):
-    user = update.effective_user
-    config = ATTACK_PROFILES[speed]
-    
-    job = context.application.job_queue.run_repeating(
-        attack_callback,
-        interval=config['delay'],
-        first=1,
-        data={
-            'user_id': user.id,
-            'speed': speed,
-            'symbol': config['symbol'],
-            'custom_message': user_stats[user.id].get('custom_message')
-        }
-    )
-    
-    active_sessions[user.id] = {
-        'job': job,
-        'message_count': 0
-    }
+    new_message = update.message.text * 100  # تكرار الرسالة 100 مرة
+    user_settings[user.id]['custom_message'] = new_message
+    user_settings[user.id]['awaiting_input'] = False
     
     await update.message.reply_text(
-        f"⚡ بدأ الهجوم بسرعة {speed}!\n"
-        f"⏱ كل {config['delay']} ثانية"
+        f"✅ تم تعيين الرسالة:\n{new_message[:50]}...",
+        reply_markup=main_keyboard
     )
 
 async def attack_callback(context: CallbackContext):
+    """إرسال الرسائل التلقائية"""
     job = context.job
     user_id = job.data['user_id']
-    symbol = job.data['symbol']
-    custom_msg = job.data['custom_message']
     
     try:
-        # استخدام الرسالة المخصصة إذا وجدت
-        message = custom_msg if custom_msg else symbol * 100
-        
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=message
-        )
-        
-        active_sessions[user_id]['message_count'] += 1
-        
+        message = user_settings[user_id]['custom_message']
+        await context.bot.send_message(user_id, message)
+        active_sessions[user_id]['count'] += 1
     except Exception as e:
         logging.error(f"فشل الإرسال: {e}")
+        await notify_admin(context, f"🚨 خطأ: {str(e)[:200]}")
 
-# باقي الدوال (emergency_stop, show_settings, show_statistics, show_help) تبقى كما هي
+async def handle_speed_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة اختيار السرعة"""
+    user = update.effective_user
+    if user_settings.get(user.id, {}).get('awaiting_speed'):
+        speed = update.message.text
+        if speed in ATTACK_PROFILES:
+            delay = ATTACK_PROFILES[speed]['delay']
+            job = context.application.job_queue.run_repeating(
+                attack_callback,
+                interval=delay,
+                data={'user_id': user.id}
+            )
+            active_sessions[user.id] = {'job': job, 'count': 0}
+            await update.message.reply_text(
+                f"⚡ بدأ الهجوم بسرعة {speed}!",
+                reply_markup=main_keyboard
+            )
+            user_settings[user.id]['awaiting_speed'] = False
+
+async def notify_admin(context: CallbackContext, message: str):
+    """إرسال إشعارات للمطور"""
+    try:
+        await context.bot.send_message(ADMIN_ID, message)
+    except Exception as e:
+        logging.error(f"فشل إرسال الإشعار: {e}")
+
+async def error_handler(update: Update, context: CallbackContext):
+    """معالجة الأخطاء العامة"""
+    error = context.error
+    logging.error(f"حدث خطأ: {error}")
+    await notify_admin(context, f"🔥 خطأ حرج: {error}")
 
 def main():
+    """تهيئة وتشغيل البوت"""
     application = Application.builder().token(TOKEN).build()
     
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_commands))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_custom_message))
+    # إضافة المعالجات
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_speed_selection))
     application.add_error_handler(error_handler)
     
     application.run_polling()
