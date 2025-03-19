@@ -10,6 +10,7 @@ from telegram.ext import (
 import logging
 import time
 import os
+import random
 
 # إعدادات البوت من المتغيرات البيئية
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -24,12 +25,13 @@ ATTACK_MODES = {
 }
 
 # لوحة المفاتيح التفاعلية
-keyboard = ReplyKeyboardMarkup(
+main_keyboard = ReplyKeyboardMarkup(
     [
         ["تشغيل الهجوم 🚀", "إيقاف الهجوم 🛑"],
-        ["تغيير السرعة ⚡"],
+        ["تغيير السرعة ⚡", "العودة للقائمة 🏠"],
     ],
-    resize_keyboard=True
+    resize_keyboard=True,
+    persistent=True
 )
 
 # متغيرات النظام
@@ -40,8 +42,12 @@ logging.basicConfig(
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض لوحة المفاتيح الرئيسية تلقائيًا"""
     user = update.effective_user
-    await update.message.reply_text(f"مرحبا {user.first_name}!\nاختر نمط الهجوم:", reply_markup=keyboard)
+    await update.message.reply_text(
+        f"مرحبا {user.first_name}! 👾\nاختر من الأزرار:",
+        reply_markup=main_keyboard
+    )
     
     # إرسال إشعار للقروب
     await context.bot.send_message(
@@ -53,7 +59,9 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.effective_chat.id
     
-    if text == "تشغيل الهجوم 🚀":
+    if text == "العودة للقائمة 🏠":
+        await start(update, context)
+    elif text == "تشغيل الهجوم 🚀":
         await start_attack(update, context, 'fast')
     elif text == "إيقاف الهجوم 🛑":
         await stop_attack(update, context)
@@ -108,7 +116,8 @@ async def switch_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     current_mode = active_attacks[chat_id]['mode']
-    new_mode = 'medium' if current_mode == 'fast' else 'slow' if current_mode == 'medium' else 'fast'
+    modes = list(ATTACK_MODES.keys())
+    new_mode = modes[(modes.index(current_mode) + 1) % len(modes)]
     
     await stop_attack(update, context)
     await start_attack(update, context, new_mode)
