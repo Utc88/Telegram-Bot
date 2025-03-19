@@ -1,46 +1,65 @@
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    JobQueue,
+)
 import logging
 import time
+import os  # <-- إضافة هذه المكتبة
 
-TOKEN = "YOUR_BOT_TOKEN"
-GROUP_ID = -1002607695043  # آيدي القروب
-ADMIN_ID = 6651872224  # آيدي حسابك
+# الحصول على التوكن من المتغيرات البيئية
+TOKEN = os.environ.get("BOT_TOKEN")  # <-- التعديل هنا
+GROUP_ID = int(os.environ.get("GROUP_ID", -100123456789))
+ADMIN_ID = int(os.environ.get("ADMIN_ID", 123456789))
 
+# تهيئة نظام التسجيل
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مرحبا! البوت يعمل عبر GitHub 🚀")
+    await update.message.reply_text("🤖 البوت يعمل بنجاح!")
 
-async def send_to_group(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(
-        chat_id=GROUP_ID,
-        text="📢 إشعار تلقائي من البوت!"
-    )
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logging.error(f"Error: {context.error}")
-    await context.bot.send_message(ADMIN_ID, f"⚠️ خطأ في البوت: {context.error}")
+async def send_notification(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await context.bot.send_message(
+            chat_id=GROUP_ID,
+            text="🔔 إشعار تلقائي من البوت!"
+        )
+    except Exception as e:
+        logging.error(f"فشل الإرسال: {e}")
 
 def main():
-    application = Application.builder().token(TOKEN).build()
+    # التحقق من وجود التوكن
+    if not TOKEN:
+        logging.error("❌ لم يتم تعيين BOT_TOKEN في البيئة!")
+        return
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_error_handler(error_handler)
-
-    # إرسال إشعار كل ساعة
-    job_queue = application.job_queue
-    job_queue.run_repeating(send_to_group, interval=3600, first=10)
-
-    application.run_polling()
+    try:
+        application = Application.builder().token(TOKEN).build()
+        job_queue = application.job_queue
+        
+        job_queue.run_repeating(
+            send_notification,
+            interval=300,
+            first=10
+        )
+        
+        application.add_handler(CommandHandler("start", start))
+        application.run_polling()
+        
+    except Exception as e:
+        logging.error(f"خطأ رئيسي: {e}")
 
 if __name__ == "__main__":
     while True:
         try:
             main()
         except Exception as e:
-            logging.error(f"Restarting bot due to: {e}")
+            logging.error(f"إعادة التشغيل بسبب: {e}")
             time.sleep(10)
