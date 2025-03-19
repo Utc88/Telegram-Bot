@@ -1,8 +1,8 @@
 name: Telegram Bot Deployment
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
 
 jobs:
   deploy:
@@ -17,6 +17,5 @@ jobs:
       - name: Run Bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          GROUP_ID: ${{ secrets.GROUP_ID }}
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
         run: python bot.py
