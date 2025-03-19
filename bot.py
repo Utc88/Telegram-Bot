@@ -5,153 +5,83 @@ from telegram.ext import (
     MessageHandler,
     filters,
     ContextTypes,
-    JobQueue,
+    CallbackContext,
 )
 import logging
-import time
 import os
-import random
 
-# إعدادات البوت من المتغيرات البيئية
+# إعدادات البوت
 TOKEN = os.environ.get("BOT_TOKEN")
 GROUP_ID = int(os.environ.get("GROUP_ID"))
 ADMIN_ID = int(os.environ.get("ADMIN_ID"))
 
-# إعدادات الهجوم
-ATTACK_MODES = {
-    'fast': {'delay': 0.5, 'messages': ["🚀 هجوم سريع!", "💣 إنفجار رسائل!"]},
-    'medium': {'delay': 2, 'messages': ["🌀 هجوم متوسط!", "🕷 زحف إزعاج!"]},
-    'slow': {'delay': 5, 'messages': ["🐌 هجوم بطيء!", "⏳ إستفزاز ناعم!"]}
-}
-
 # لوحة المفاتيح التفاعلية
-main_keyboard = ReplyKeyboardMarkup(
+KEYBOARD = ReplyKeyboardMarkup(
     [
         ["تشغيل الهجوم 🚀", "إيقاف الهجوم 🛑"],
-        ["تغيير السرعة ⚡", "العودة للقائمة 🏠"],
+        ["تغيير السرعة ⚡", "القائمة الرئيسية 🏠"],
     ],
     resize_keyboard=True,
-    persistent=True
+    is_persistent=True,  # إظهار اللوحة بشكل دائم
+    selective=True  # إظهارها للمستخدمين المحددين
 )
 
-# متغيرات النظام
-active_attacks = {}
+# تهيئة النظام
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض لوحة المفاتيح الرئيسية تلقائيًا"""
+    """الدالة المسؤولة عن بدء المحادثة"""
     user = update.effective_user
+    
+    # إرسال الرسالة مع اللوحة
     await update.message.reply_text(
-        f"مرحبا {user.first_name}! 👾\nاختر من الأزرار:",
-        reply_markup=main_keyboard
+        f"مرحبا {user.first_name}! 👾\nاختر أحد الأزرار:",
+        reply_markup=KEYBOARD
     )
     
     # إرسال إشعار للقروب
     await context.bot.send_message(
         chat_id=GROUP_ID,
-        text=f"👤 مستخدم جديد:\n{user.full_name}\n@{user.username}"
+        text=f"👤 مستخدم جديد: @{user.username}"
     )
 
-async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة جميع الرسائل الواردة"""
     text = update.message.text
-    chat_id = update.effective_chat.id
     
-    if text == "العودة للقائمة 🏠":
+    # إعادة إظهار اللوحة عند طلب القائمة
+    if text == "القائمة الرئيسية 🏠":
         await start(update, context)
-    elif text == "تشغيل الهجوم 🚀":
-        await start_attack(update, context, 'fast')
-    elif text == "إيقاف الهجوم 🛑":
-        await stop_attack(update, context)
-    elif text == "تغيير السرعة ⚡":
-        await switch_mode(update, context)
-
-async def start_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, mode: str):
-    chat_id = update.effective_chat.id
-    
-    if chat_id in active_attacks:
-        await update.message.reply_text("⚠️ الهجوم يعمل بالفعل!")
         return
     
-    job = context.application.job_queue.run_repeating(
-        attack_callback,
-        interval=ATTACK_MODES[mode]['delay'],
-        first=1,
-        data={'chat_id': chat_id, 'mode': mode}
+    # إعادة إرسال اللوحة مع كل رسالة
+    await update.message.reply_text(
+        "✅ البوت يعمل، اختر من الأزرار:",
+        reply_markup=KEYBOARD
     )
-    
-    active_attacks[chat_id] = {'mode': mode, 'job': job}
-    await update.message.reply_text(f"⚡ بدأ الهجوم بنمط {mode}!")
-    
-    # إرسال إشعار للقروب
+
+async def error_handler(update: Update, context: CallbackContext):
+    """معالجة الأخطاء"""
+    logging.error(f"حدث خطأ: {context.error}")
     await context.bot.send_message(
-        chat_id=GROUP_ID,
-        text=f"🚨 هجوم جديد بدأ بواسطة @{update.effective_user.username}"
+        chat_id=ADMIN_ID,
+        text=f"⚠️ خطأ: {context.error}"
     )
-
-async def stop_attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in active_attacks:
-        await update.message.reply_text("❌ لا يوجد هجوم نشط!")
-        return
-    
-    active_attacks[chat_id]['job'].schedule_removal()
-    del active_attacks[chat_id]
-    await update.message.reply_text("✅ تم إيقاف الهجوم!")
-    
-    # إرسال إشعار للقروب
-    await context.bot.send_message(
-        chat_id=GROUP_ID,
-        text=f"🛑 توقف الهجوم بواسطة @{update.effective_user.username}"
-    )
-
-async def switch_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    
-    if chat_id not in active_attacks:
-        await update.message.reply_text("❌ أبدأ الهجوم أولاً!")
-        return
-    
-    current_mode = active_attacks[chat_id]['mode']
-    modes = list(ATTACK_MODES.keys())
-    new_mode = modes[(modes.index(current_mode) + 1) % len(modes)]
-    
-    await stop_attack(update, context)
-    await start_attack(update, context, new_mode)
-
-async def attack_callback(context: ContextTypes.DEFAULT_TYPE):
-    job = context.job
-    mode = job.data['mode']
-    chat_id = job.data['chat_id']
-    
-    try:
-        message = random.choice(ATTACK_MODES[mode]['messages'])
-        await context.bot.send_message(chat_id, message)
-    except Exception as e:
-        logging.error(f"فشل الإرسال: {e}")
-        await context.bot.send_message(ADMIN_ID, f"⚠️ خطأ: {e}")
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    error = context.error
-    logging.error(f"خطأ غير متوقع: {error}")
-    await context.bot.send_message(ADMIN_ID, f"🔥 خطأ حرج: {error}")
 
 def main():
+    # تهيئة البوت
     application = Application.builder().token(TOKEN).build()
     
+    # إضافة المعالجات
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_buttons))
+    application.add_handler(MessageHandler(filters.ALL, handle_messages))
     application.add_error_handler(error_handler)
     
+    # بدء التشغيل
     application.run_polling()
 
 if __name__ == "__main__":
-    while True:
-        try:
-            main()
-        except Exception as e:
-            logging.error(f"إعادة التشغيل بسبب: {e}")
-            time.sleep(10)
+    main()
