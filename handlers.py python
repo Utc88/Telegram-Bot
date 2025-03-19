@@ -65,6 +65,13 @@ async def handle_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------
 #  دوال الهجوم
 # ---------------------------
+async def start_attack_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "⚡ اختر سرعة الهجوم:",
+        reply_markup=get_speed_keyboard()
+    )
+    user_settings[update.effective_user.id]['awaiting_speed'] = True
+
 async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, speed: str):
     user = update.effective_user
     config = {
@@ -85,12 +92,14 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
             'message': user_settings[user.id]['custom_message']
         },
         name=str(user.id)
+    )  # التأكد من إغلاق الأقواس هنا
     
     active_sessions[user.id] = {
         'job': job,
         'start_time': datetime.now(),
         'count': 0
     }
+    user_settings[user.id]['attack_count'] += 1
     
     await update.message.reply_text(
         f"⚡ تم تفعيل الهجوم ({speed})",
@@ -101,9 +110,14 @@ async def attack_callback(context: CallbackContext):
     try:
         job = context.job
         user_id = int(job.name)
-        message = job.data['message']
         
-        await context.bot.send_message(user_id, message)
+        if user_id not in active_sessions:
+            return
+            
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=job.data['message']
+        )
         active_sessions[user_id]['count'] += 1
         
     except Exception as e:
