@@ -1,21 +1,27 @@
 name: Telegram Bot Deployment
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - name: Checkout code
+        uses: actions/checkout@v4  # هذه الخطوة ضرورية لتحميل الملفات
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+          
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          
       - name: Run Bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
-        run: python bot.py
+        run: python main.py  # تأكد من اسم الملف هنا
