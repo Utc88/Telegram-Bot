@@ -1,20 +1,22 @@
-name: Telegram Bot Runner
+name: Telegram Bot Deployment
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:    # يسمح بالتشغيل اليدوي
   push:
-    branches: [ main ]
+    branches: [ main ]  # التشغيل التلقائي عند الدفع للفرع الرئيسي
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/5 * * * *"  # يشغل كل 5 دقائق (تعدل حسب الحاجة)
 
 jobs:
-  deploy:
+  deploy-bot:
     runs-on: ubuntu-latest
+    environment: production  # اختياري لإدارة البيئات
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
@@ -22,8 +24,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install python-telegram-bot[job-queue]==20.3
+          pip install -r requirements.txt
           
-      - name: Run Bot
+      - name: Run Telegram Bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GROUP_ID: ${{ secrets.GROUP_ID }}
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
         run: python bot.py
