@@ -93,7 +93,7 @@ async def show_main_menu(update: Update):
     )
 
 # ---------------------------
-#  نظام الهجوم
+#  نظام الهجوم (تم التصحيح هنا)
 # ---------------------------
 async def start_attack_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -110,6 +110,7 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
     if user.id in active_sessions:
         active_sessions[user.id]['job'].schedule_removal()
     
+    # التصحيح: إضافة القوس المفقود هنا
     job = context.application.job_queue.run_repeating(
         callback=attack_callback,
         interval=config['delay'],
@@ -119,6 +120,7 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
             'message': user_settings[user.id]['custom_message']
         },
         name=str(user.id)
+    )  # <-- هذا القوس كان مفقودًا
     
     active_sessions[user.id] = {
         'job': job,
@@ -133,6 +135,9 @@ async def execute_attack(update: Update, context: ContextTypes.DEFAULT_TYPE, spe
         reply_markup=main_keyboard
     )
 
+# ---------------------------
+#  باقي الدوال بدون تغيير
+# ---------------------------
 async def attack_callback(context: CallbackContext):
     try:
         job = context.job
@@ -155,9 +160,6 @@ async def attack_callback(context: CallbackContext):
         logging.error(f"فشل الإرسال: {str(e)}")
         await notify_admin(context, f"🔥 خطأ: {str(e)[:200]}")
 
-# ---------------------------
-#  الدوال المساعدة
-# ---------------------------
 async def stop_attack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id in active_sessions:
